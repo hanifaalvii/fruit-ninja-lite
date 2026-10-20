@@ -14,3 +14,4 @@ alter table public.scores enable row level security;
 -- everyone can read the leaderboard and add scores; nobody can edit or delete
 create policy "anyone can read scores" on public.scores for select using (true);
 create policy "anyone can add scores" on public.scores for insert with check (true);
+where

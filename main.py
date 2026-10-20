@@ -3,7 +3,7 @@
 Desktop:  pip install pygame-ce  &&  python main.py
 Web/phone: built with pygbag (see README.md).
 Swipe with mouse or finger to slice fruit.  ESC = pause, M = mute, F = fullscreen.
-All sounds and music are synthesised at start-up, so no asset files are needed.
+All sounds are synthesised at start-up, so no asset files are needed.
 """
 import array
 import asyncio
@@ -472,24 +472,103 @@ class Game:
                       ("over", make_over), ("click", make_click), ("freeze", make_freeze),
                       ("frenzy", make_frenzy)]:
             steps.append(("Sharpening sounds", lambda n=n, fn=fn: self.sounds.__setitem__(n, fn())))
-        steps.append(("Composing menu music", lambda: self.sounds.__setitem__("m_menu", make_music(96, "tri", 0.14, False, 1))))
-        steps.append(("Composing game music", lambda: self.sounds.__setitem__("m_game", make_music(132, "square", 0.05, True, 2))))
+        self.ld = {"items": [], "pieces": [], "parts": [], "trail": [], "spawn": 0.2, "sliced": 0,
+                   "last": None, "down": False, "clock": pygame.time.Clock(), "p": 0.0, "label": ""}
         for i, (label, fn) in enumerate(steps):
-            self.draw_loading(label, i / len(steps))
-            for e in pygame.event.get():
-                if e.type == pygame.QUIT:
-                    self.quit()
+            self.ld["label"], self.ld["p"] = label, i / len(steps)
+            self.loading_frame()
             fn()
             await asyncio.sleep(0)
-        self.draw_loading("Ready!", 1.0)
-        await asyncio.sleep(0)
+        self.ld["label"], self.ld["p"] = "Ready!", 1.0
+        end = pygame.time.get_ticks() + 3500
+        while pygame.time.get_ticks() < end:
+            self.loading_frame()
+            await asyncio.sleep(0)
         self.build_menu()
         self.build_ui()
+
+    def loading_frame(self):
+        L = self.ld
+        dt = min(0.05, L["clock"].tick(60) / 1000)
+        for e in pygame.event.get():
+            if e.type == pygame.QUIT:
+                self.quit()
+            elif e.type == pygame.MOUSEBUTTONDOWN:
+                L["down"], L["last"] = True, e.pos
+            elif e.type == pygame.MOUSEBUTTONUP:
+                L["down"], L["last"] = False, None
+            elif e.type == pygame.MOUSEMOTION and L["down"]:
+                self.ld_slice(L["last"] or e.pos, e.pos)
+                L["last"] = e.pos
+                L["trail"].append([e.pos[0], e.pos[1], 0.25])
+        L["spawn"] -= dt
+        if L["spawn"] <= 0 and self.fruit_sprites:
+            name = random.choice(list(self.fruit_sprites))
+            x = random.uniform(160, W - 160)
+            spr = self.fruit_sprites[name][0]
+            L["items"].append(Item("fruit", spr, self.fruit_sprites[name][3], x, H + 40,
+                                   (W / 2 - x) * random.uniform(0.1, 0.35), -random.uniform(780, 960),
+                                   random.uniform(-200, 200), name))
+            L["spawn"] = random.uniform(0.35, 0.8)
+        for it in L["items"]:
+            it.update(dt, 900)
+        L["items"] = [i for i in L["items"] if i.alive and i.y < H + 120]
+        for p in L["pieces"]:
+            p.update(dt, 900)
+        L["pieces"] = [p for p in L["pieces"] if p.y < H + 150]
+        for p in L["parts"]:
+            p[0] += p[2] * dt
+            p[1] += p[3] * dt
+            p[3] += 700 * dt
+            p[4] -= dt
+        L["parts"] = [p for p in L["parts"] if p[4] > 0]
+        for t in L["trail"]:
+            t[2] -= dt
+        L["trail"] = [t for t in L["trail"] if t[2] > 0]
+        self.draw_loading(L["label"], L["p"])
+
+    def ld_slice(self, a, b):
+        L = self.ld
+        ax, ay = a
+        bx, by = b
+        dx, dy = bx - ax, by - ay
+        ln = math.hypot(dx, dy)
+        if ln < 1:
+            return
+        for it in L["items"]:
+            t = max(0, min(1, ((it.x - ax) * dx + (it.y - ay) * dy) / (ln * ln)))
+            if math.hypot(ax + dx * t - it.x, ay + dy * t - it.y) < it.r + 8:
+                it.alive = False
+                L["sliced"] += 1
+                whole, left, right, r = self.fruit_sprites[it.name]
+                ang = math.degrees(math.atan2(-dy, dx))
+                nx, ny = -dy / ln, dx / ln
+                for spr, sgn in ((left, 1), (right, -1)):
+                    p = Item("piece", spr, r, it.x, it.y, it.vx + nx * 130 * sgn, it.vy * 0.4 + ny * 130 * sgn, 0)
+                    p.rot, p.vrot = ang - 90, random.uniform(40, 160) * sgn
+                    L["pieces"].append(p)
+                for _ in range(14):
+                    a2 = random.uniform(0, 6.283)
+                    sp = random.uniform(80, 340)
+                    L["parts"].append([it.x, it.y, math.cos(a2) * sp, math.sin(a2) * sp,
+                                       random.uniform(0.3, 0.7), FRUITS[it.name][1]])
+                if "slice" in self.sounds:
+                    self.sfx("slice", 0.6)
 
     def draw_loading(self, label, p):
         s = self.screen
         s.fill((30, 16, 6))
         pygame.draw.circle(s, (60, 36, 16), (W // 2, H // 2 - 40), 300)
+        L = self.ld
+        for it in L["items"]:
+            it.draw(s)
+        for it in L["pieces"]:
+            it.draw(s)
+        for q in L["parts"]:
+            pygame.draw.circle(s, q[5], (int(q[0]), int(q[1])), max(1, int(q[4] * 8)))
+        pts = [(t[0], t[1]) for t in L["trail"]]
+        if len(pts) > 1:
+            pygame.draw.lines(s, (255, 255, 255), False, pts, 5)
         self.draw_logo(W // 2, H // 2 - 110)
         bar = pygame.Rect(0, 0, 420, 22)
         bar.center = (W // 2, H // 2 + 60)
@@ -501,6 +580,11 @@ class Game:
             pygame.draw.rect(s, (110, 200, 50), fill, border_radius=7)
         t = self.f_small.render(f"{label}...", True, (255, 240, 200))
         s.blit(t, t.get_rect(center=(W // 2, H // 2 + 100)))
+        t = self.f_small.render("Swipe to slice the fruit while you wait!", True, (255, 210, 74))
+        s.blit(t, t.get_rect(center=(W // 2, H - 40)))
+        if L["sliced"]:
+            t = self.f_med.render(f"Sliced: {L['sliced']}", True, (255, 255, 255))
+            s.blit(t, t.get_rect(center=(W // 2, 40)))
         pygame.display.flip()
 
     def draw_logo(self, cx, cy):
@@ -530,11 +614,7 @@ class Game:
         snd.play()
 
     def play_music(self, name):
-        if getattr(self, "cur_music", None) == name:
-            return
-        self.cur_music = name
-        self.music_ch.play(self.sounds[name], loops=-1, fade_ms=600)
-        self.apply_volume()
+        pass
 
     def quit(self):
         self.persist()
@@ -570,8 +650,7 @@ class Game:
         self.btn_full_hud = None
         self.settings_btns = [Button("Back", W // 2, 470, self.close_settings)]
         self.btn_mute = Button("", W // 2, 380, self.toggle_mute, 300, 48, (90, 60, 40))
-        self.sl_music = Slider("Music", 400, 220, 320, self.save["music"])
-        self.sl_sfx = Slider("Effects", 400, 290, 320, self.save["sfx"])
+        self.sl_sfx = Slider("Effects", 400, 260, 320, self.save["sfx"])
         self.pause_btns = [Button("Resume", W // 2, 300, self.resume),
                            Button("Sound", W // 2, 370, lambda: self.open_settings("pause")),
                            Button("Menu", W // 2, 440, self.to_menu)]
@@ -1087,7 +1166,6 @@ class Game:
         elif self.state == "settings":
             self.overlay(200)
             self.draw_text(self.f_title, "Sound", (W // 2, 130))
-            self.sl_music.draw(s, self.f_med)
             self.sl_sfx.draw(s, self.f_med)
             self.btn_mute.text = "Sound: OFF" if self.save["mute"] else "Sound: ON"
             self.btn_mute.draw(s, self.f_med, mouse)
@@ -1175,9 +1253,8 @@ class Game:
             elif e.key == pygame.K_m:
                 self.toggle_mute()
         if self.state == "settings":
-            changed = self.sl_music.event(e) | self.sl_sfx.event(e)
+            changed = self.sl_sfx.event(e)
             if changed:
-                self.save["music"] = self.sl_music.value
                 self.save["sfx"] = self.sl_sfx.value
                 self.apply_volume()
         if e.type == pygame.MOUSEBUTTONDOWN and e.button == 1:

@@ -80,12 +80,17 @@ def result(rid):
 
 
 def submit(name, score, mode):
-    return _request("POST", "scores", {"name": name[:12], "score": int(score), "mode": mode})
+    if mode not in MODES:
+        raise ValueError("invalid mode")
+    score = max(0, min(int(score), 100000))
+    return _request("POST", "scores", {"name": name[:12], "score": score, "mode": mode})
 
 
 def fetch(mode=None):
     q = "scores?select=name,score,mode&order=score.desc&limit=100"
     if mode:
+        if mode not in MODES:
+            raise ValueError("invalid mode")
         q += f"&mode=eq.{mode}"
     return _request("GET", q)
 

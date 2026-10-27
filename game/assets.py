@@ -94,19 +94,14 @@ class SphereArt:
 
 
 class Theme:
+    """A cutting board backdrop. Any 1000x650 board_<name>.jpg dropped into assets/img/ replaces the baked one."""
+
     def __init__(self, name):
         self.name = name
-        self.sky = load_image(f"bg_{name}_sky.jpg", alpha=False)
-        far = load_image(f"bg_{name}_far.png")
-        near = load_image(f"bg_{name}_near.png")
-        top = 300
-        self.far = far.subsurface((0, top, settings.W, settings.H - top)).copy()
-        self.near = near.subsurface((0, top, settings.W, settings.H - top)).copy()
-        self.top = top
-        self.static = self.sky.copy()
-        self.static.blit(self.far, (0, top))
-        self.static.blit(self.near, (0, top))
-        self.static = self.static.convert()
+        img = load_image(f"board_{name}.jpg", alpha=False)
+        if img.get_size() != (settings.W, settings.H):
+            img = pygame.transform.smoothscale(img, (settings.W, settings.H))
+        self.static = img.convert()
 
 
 class Art:
@@ -115,7 +110,7 @@ class Art:
         self.bomb = self.boss = None
         self.orbs = {}
         self.splats = []
-        self.glow = self.cloud = self.petal = self.leaf = self.logo = None
+        self.glow = self.logo = self.shadow = None
         self.themes = {}
         self._tint = {}
 
@@ -150,9 +145,6 @@ class Art:
 
         def misc():
             self.glow = load_image("glow.png")
-            self.cloud = load_image("cloud.png")
-            self.petal = load_image("petal.png")
-            self.leaf = load_image("leaf.png")
             self.splats = [load_image(f"splat_{i}.png") for i in range(4)]
 
         def sphere_step(attr, name, r, halves):

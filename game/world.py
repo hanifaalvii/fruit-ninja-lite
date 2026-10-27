@@ -1,4 +1,4 @@
-"""Animated parallax backdrop: sky, drifting clouds, scrolling hills and ambient motes."""
+"""Animated cutting-board backdrop: the board itself, drifting light, floating specks, and knife scars."""
 import math
 import random
 
@@ -10,7 +10,7 @@ W, H = settings.W, settings.H
 
 
 def additive_glow(glow, size, color):
-    """Pre-multiplied glow that can be added with BLEND_RGB_ADD (cheap sparkle)."""
+    """Pre-multiplied glow that can be added with BLEND_RGB_ADD (cheap light)."""
     s = pygame.Surface((size, size))
     s.fill((0, 0, 0))
     g = pygame.transform.smoothscale(glow, (size, size))
@@ -24,79 +24,83 @@ class Backdrop:
         self.app = app
         self.t = 0.0
         self.name = None
-        self.clouds = []
+        self.canvas = None
+        self.canvas_name = None
+        self.scar_cols = ((20, 10, 4), (255, 250, 240))
         self.motes = []
-        self.cloud_sprites = []
-        self.petals = []
-        self.leaves = []
         self.glows = []
+        self.sweep = None
         self.ready = False
 
     def setup(self):
         art = self.app.art
-        if art.cloud is None or art.glow is None or art.petal is None or self.ready:
+        if art.glow is None or self.ready:
             return
         rng = random.Random(4)
-        for sc, a in ((0.8, 140), (1.1, 110), (1.5, 80)):
-            c = pygame.transform.smoothscale(art.cloud, (int(260 * sc), int(110 * sc)))
-            c.set_alpha(a)
-            self.cloud_sprites.append(c)
-        for i in range(5):
-            self.clouds.append([rng.uniform(0, W), rng.uniform(30, 230), rng.uniform(5, 16), i % 3])
-        self.glows = [additive_glow(art.glow, 26, (255, 230, 150)), additive_glow(art.glow, 18, (255, 240, 200)),
-                      additive_glow(art.glow, 34, (255, 200, 120))]
-        self.petals = [pygame.transform.rotate(art.petal, a) for a in range(0, 360, 30)]
-        self.leaves = [pygame.transform.rotate(art.leaf, a) for a in range(0, 360, 30)]
-        for _ in range(16):
-            self.motes.append([rng.uniform(0, W), rng.uniform(0, H), rng.uniform(-18, 18), rng.uniform(14, 40),
+        self.glows = [additive_glow(art.glow, 22, (255, 240, 200)), additive_glow(art.glow, 14, (255, 250, 230)),
+                      additive_glow(art.glow, 30, (255, 220, 160))]
+        self.sweep = additive_glow(art.glow, 520, (44, 36, 24))
+        for _ in range(18):
+            self.motes.append([rng.uniform(0, W), rng.uniform(0, H), rng.uniform(-10, 10), rng.uniform(-14, -4),
                                rng.uniform(0, 6.28)])
         self.ready = True
 
+    def board(self):
+        name = self.name or self.app.save["bg"]
+        if name not in settings.BOARDS:
+            name = settings.DEFAULT_BOARD
+        return name
+
     def set_theme(self, name):
         self.name = name
+        self.reset()
+
+    def reset(self):
+        """Fresh board: wipes the knife scars from the previous run."""
+        name = self.board()
+        th = self.app.art.theme(name)
+        self.canvas = th.static.copy()
+        self.canvas_name = name
+        avg = pygame.transform.average_color(th.static)[:3]
+        self.scar_cols = (tuple(int(v * 0.5) for v in avg), tuple(min(255, int(v * 1.22) + 14) for v in avg))
+
+    def scar(self, a, b):
+        """Knife marks that stay on the board for the rest of the run (painted into the cached board)."""
+        if self.canvas is None or self.canvas_name != self.board():
+            self.reset()
+        dark, light = self.scar_cols
+        pygame.draw.line(self.canvas, dark, a, b, 2)
+        pygame.draw.line(self.canvas, light, (a[0] + 1, a[1] + 2), (b[0] + 1, b[1] + 2), 1)
 
     def update(self, dt):
         self.t += dt
         if not self.ready:
             self.setup()
             return
-        for c in self.clouds:
-            c[0] += c[2] * dt
-            if c[0] > W + 40:
-                c[0] = -300
         if self.app.quality.level >= 1:
-            slow = 0.4 if self.name in ("night", "dusk") else 1.0
             for m in self.motes:
-                m[0] += (m[2] + math.sin(self.t + m[4]) * 20) * dt
-                m[1] += m[3] * dt * slow
-                if m[1] > H + 20:
-                    m[1], m[0] = -20, random.uniform(0, W)
+                m[0] += (m[2] + math.sin(self.t * 0.7 + m[4]) * 12) * dt
+                m[1] += m[3] * dt
+                if m[1] < -20:
+                    m[1], m[0] = H + 20, random.uniform(0, W)
                 if m[0] > W + 20:
                     m[0] = -20
                 elif m[0] < -20:
                     m[0] = W + 20
 
     def draw(self, surf):
-        th = self.app.art.theme(self.name or self.app.save["bg"])
+        if self.canvas is None or self.canvas_name != self.board():
+            self.reset()
+        surf.blit(self.canvas, (0, 0))
         q = self.app.quality
         if not (q.parallax and self.ready):
-            surf.blit(th.static, (0, 0))
             return
-        surf.blit(th.sky, (0, 0))
-        for x, y, _s, k in self.clouds:
-            surf.blit(self.cloud_sprites[k], (x, y))
-        for layer, speed in ((th.far, 6.0), (th.near, 14.0)):
-            off = int((self.t * speed) % W)
-            surf.blit(layer, (-off, th.top))
-            surf.blit(layer, (W - off, th.top))
+        if q.level >= 2 and self.sweep is not None:
+            x = (self.t * 38) % (W + 900) - 700
+            y = 120 + 90 * math.sin(self.t * 0.31)
+            surf.blit(self.sweep, (x, y), special_flags=pygame.BLEND_RGB_ADD)
         n = len(self.motes) if q.level >= 2 else len(self.motes) // 2
-        name = th.name
         for i in range(n):
             x, y, _vx, _vy, ph = self.motes[i]
-            if name == "sakura":
-                surf.blit(self.petals[int((self.t * 3 + ph * 2) % 12)], (x, y))
-            elif name == "orchard":
-                surf.blit(self.leaves[int((self.t * 2 + ph * 2) % 12)], (x, y))
-            else:
-                g = self.glows[int((self.t * 2 + ph) % 3)]
-                surf.blit(g, (x, y), special_flags=pygame.BLEND_RGB_ADD)
+            g = self.glows[int((self.t * 1.5 + ph) % 3)]
+            surf.blit(g, (x, y), special_flags=pygame.BLEND_RGB_ADD)

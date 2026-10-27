@@ -340,58 +340,6 @@ def splats():
         save(s, f"splat_{i}.png")
 
 
-def cloud():
-    s = pygame.Surface((260, 110), pygame.SRCALPHA)
-    for cx, cy, rr in ((60, 70, 34), (110, 52, 42), (165, 60, 38), (205, 76, 28), (130, 78, 36)):
-        for k in range(rr, 0, -2):
-            pygame.draw.circle(s, (255, 255, 255, int(16 + 20 * (1 - k / rr))), (cx, cy), k)
-    save(s, "cloud.png")
-
-
-def petal(name, col):
-    s = pygame.Surface((22, 22), pygame.SRCALPHA)
-    pygame.draw.ellipse(s, col, (2, 6, 18, 10))
-    pygame.draw.ellipse(s, (255, 255, 255, 90), (5, 8, 8, 3))
-    save(s, name)
-
-
-THEMES = {
-    # sky top, sky bottom, far hills, near hills, sun/moon colour, sun pos
-    "orchard": ((70, 170, 255), (255, 240, 190), (90, 170, 120), (46, 120, 70), (255, 245, 170), (780, 150)),
-    "dusk": ((70, 40, 120), (255, 150, 90), (150, 70, 110), (78, 34, 80), (255, 210, 120), (240, 330)),
-    "night": ((8, 12, 40), (44, 60, 120), (30, 44, 90), (14, 22, 56), (235, 240, 255), (800, 120)),
-    "sakura": ((255, 170, 200), (255, 232, 238), (230, 140, 170), (176, 88, 130), (255, 250, 235), (200, 140)),
-}
-
-
-def background(name):
-    top, bot, far, near, sun, (sx, sy) = THEMES[name]
-    W, H = 1000, 650
-    sky = pygame.Surface((W, H))
-    for y in range(H):
-        sky.fill(mix(top, bot, smooth(y / H * 1.1)), (0, y, W, 1))
-    glow_s = pygame.Surface((W, H), pygame.SRCALPHA)
-    for rr in range(220, 0, -4):
-        pygame.draw.circle(glow_s, (*sun, int(70 * (1 - rr / 220) ** 2)), (sx, sy), rr)
-    pygame.draw.circle(glow_s, (*sun, 255), (sx, sy), 46 if name != "night" else 36)
-    sky.blit(glow_s, (0, 0))
-    if name == "night":
-        rng = random.Random(5)
-        for _ in range(110):
-            x, y = rng.randint(0, W), rng.randint(0, 330)
-            v = rng.randint(130, 255)
-            pygame.draw.circle(sky, (v, v, 255), (x, y), rng.choice((1, 1, 2)))
-    pygame.image.save(sky, os.path.join(OUT, f"bg_{name}_sky.jpg"))
-    # periodic hill layers so they scroll seamlessly (two tiles side by side at runtime)
-    for lname, col, base, amp, k in (("far", far, 400, 55, 2), ("near", near, 500, 40, 3)):
-        s = pygame.Surface((W, H), pygame.SRCALPHA)
-        for x in range(W):
-            ph = x / W * 2 * math.pi
-            y = base + amp * math.sin(ph * k + 1.0) + amp * 0.45 * math.sin(ph * (k * 2 + 1) + 2.0)
-            pygame.draw.line(s, (*col, 255), (x, int(y)), (x, H))
-        save(s, f"bg_{name}_{lname}.png")
-
-
 def logo():
     font = pygame.font.SysFont("arialrounded,arialroundedmtbold,trebuchetms,verdana", 120, bold=True)
     parts = (("Fruit", (255, 226, 80), (255, 140, 20)), ("Slash", (255, 110, 90), (214, 28, 70)))
@@ -444,11 +392,6 @@ def main():
     orb("frenzy", (255, 220, 100), (240, 60, 40), glyph_bolt)
     glow(96, (255, 255, 255), "glow.png")
     splats()
-    cloud()
-    petal("petal.png", (255, 170, 200, 255))
-    petal("leaf.png", (120, 200, 80, 255))
-    for t in THEMES:
-        background(t)
     logo()
     print("done")
 

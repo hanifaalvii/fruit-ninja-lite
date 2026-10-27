@@ -51,7 +51,7 @@ def test_old_save_gets_defaults(tmp_path, monkeypatch):
     monkeypatch.setattr(progress, "SAVE", str(p))
     d = progress.load()
     assert d["music"] == 0.3 and d["best"]["classic"] == 12
-    assert d["unlocks"] == {"blade": ["classic"], "bg": ["orchard"]}
+    assert d["unlocks"] == {"blade": ["classic"], "bg": ["pine"]}
     assert d["difficulty"] == "normal" and d["ach"] == []
 
 
@@ -91,3 +91,23 @@ def test_daily_completes_once():
              "boss_down": 1, "powerups": 9}
     assert progress.daily_update(s, stats, day) is True
     assert progress.daily_update(s, stats, day) is False
+
+
+def test_old_sky_theme_save_maps_to_a_board(tmp_path, monkeypatch):
+    p = tmp_path / "s.json"
+    p.write_text('{"bg": "dusk", "unlocks": {"bg": ["orchard", "dusk"], "blade": ["classic"]}}')
+    monkeypatch.setattr(progress, "SAVE", str(p))
+    d = progress.load()
+    assert d["bg"] == "pine" and d["unlocks"]["bg"] == ["pine"]
+
+
+def test_boards_unlock_by_score_in_order():
+    s = progress.load_defaults()
+    assert progress.next_board(s)[:2] == ("bamboo", 100)
+    s["best"] = {"arcade": 650}
+    new = progress.unlock_new(s)
+    assert "bg:bamboo" in new and "bg:walnut" in new and "bg:marble" in new and "bg:slate" not in new
+    assert progress.next_board(s)[:2] == ("slate", 1000)
+    s["best"] = {"arcade": 5000}
+    progress.unlock_new(s)
+    assert progress.next_board(s) is None

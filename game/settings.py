@@ -32,7 +32,10 @@ DIFFICULTY = {
     "hard": {"label": "Hard", "lives": 2, "count": 1.3, "bomb": 1.4, "speed": 1.08, "gap": 0.8},
 }
 
-THEMES = ("orchard", "dusk", "night", "sakura")
+BOARDS = ("pine", "bamboo", "walnut", "marble", "slate", "gold")
+BOARD_NAMES = {"pine": "Pine Board", "bamboo": "Bamboo Board", "walnut": "Walnut Board", "marble": "Marble Slab",
+               "slate": "Gilded Slate", "gold": "Royal Gold"}
+DEFAULT_BOARD = "pine"
 BLADES = ("classic", "flame", "ice", "neon", "rainbow")
 BLADE_COLORS = {
     "classic": ((255, 255, 255), (170, 220, 255)),

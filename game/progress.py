@@ -10,8 +10,8 @@ SAVE = settings.SAVE_PATH
 
 DEFAULTS = {
     "music": 0.6, "sfx": 0.8, "mute": False, "best": {}, "name": "",
-    "unlocks": {"blade": ["classic"], "bg": ["orchard"]},
-    "blade": "classic", "bg": "orchard", "difficulty": "normal",
+    "unlocks": {"blade": ["classic"], "bg": ["pine"]},
+    "blade": "classic", "bg": "pine", "difficulty": "normal",
     "ach": [], "daily": {}, "totals": {"sliced": 0, "games": 0, "modes": []},
 }
 
@@ -43,6 +43,17 @@ def load():
             _merge(data, stored)
     except Exception:
         pass
+    return _sanitize(data)
+
+
+def _sanitize(data):
+    """Old saves used sky themes (orchard, dusk...); map anything unknown back onto the board set."""
+    owned = [b for b in data["unlocks"].get("bg", []) if b in settings.BOARDS]
+    if settings.DEFAULT_BOARD not in owned:
+        owned.insert(0, settings.DEFAULT_BOARD)
+    data["unlocks"]["bg"] = owned
+    if data.get("bg") not in owned:
+        data["bg"] = settings.DEFAULT_BOARD
     return data
 
 
@@ -95,7 +106,8 @@ def check_achievements(save_data, stats):
 UNLOCKS = {
     "blade": {"classic": None, "flame": ("score", 150), "ice": ("score", 400), "neon": ("ach", "boss_down"),
               "rainbow": ("score", 1500)},
-    "bg": {"orchard": None, "dusk": ("score", 250), "night": ("ach", "fruit_100"), "sakura": ("score", 600)},
+    "bg": {"pine": None, "bamboo": ("score", 100), "walnut": ("score", 300), "marble": ("score", 600),
+           "slate": ("score", 1000), "gold": ("score", 2000)},
 }
 
 
@@ -104,6 +116,15 @@ def unlock_text(req):
         return "Unlocked"
     kind, val = req
     return f"Best score {val}" if kind == "score" else "Achievement: " + ACH_BY_ID[val][1]
+
+
+def next_board(save_data):
+    """(name, score needed) of the cheapest locked board, or None when all are owned."""
+    top = best_score(save_data)
+    for name, req in UNLOCKS["bg"].items():
+        if name not in save_data["unlocks"]["bg"] and req and req[0] == "score":
+            return name, req[1], top
+    return None
 
 
 def best_score(save_data):

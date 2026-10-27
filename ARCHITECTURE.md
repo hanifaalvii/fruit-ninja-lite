@@ -8,7 +8,7 @@
 | `scenes.py` | Loading, Menu, Settings, Awards, Unlocks, NameEntry |
 | `play.py` | Gameplay: all modes, slicing, combos, power-ups, boss, pause, game over |
 | `common.py` | Scene base class, fruit splitting, sliding Top-3 leaderboard tab |
-| `world.py` | Animated parallax backdrop |
+| `world.py` | Cutting-board backdrop: cached board + persistent knife scars, drifting light, specks |
 | `effects.py` | Quality governor, capped particles, shake, slow-mo, juice splats, blade trail |
 | `entities.py` | Flying items and sliced halves, safe physics step |
 | `assets.py` | Time-sliced `Loader`, `Art` (cached sprites: tumbling body + fixed light overlay) |

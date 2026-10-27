@@ -191,3 +191,63 @@ class BladeTrail:
             w = max(1, int(11 * (1 - age)))
             line(surf, core, a[:2], b[:2], w)
             circle(surf, core, b[:2], max(1, w // 2))
+
+
+class Shadows:
+    """Soft drop shadows cached per radius; they drift and fade with height so fruit feel airborne."""
+
+    def __init__(self):
+        self.cache = {}
+
+    def get(self, r):
+        r = int(r) // 4 * 4 + 4
+        s = self.cache.get(r)
+        if s is None:
+            w, h = r * 2 + 16, int(r * 1.3) + 12
+            s = pygame.Surface((w, h), pygame.SRCALPHA)
+            for i in range(6, 0, -1):
+                k = i / 6
+                pygame.draw.ellipse(s, (0, 0, 0, int(34 * (1 - k) + 10)),
+                                    (int(w * (0.5 - 0.5 * k * 0.92 - 0.04)), int(h * (0.5 - 0.5 * k * 0.9)),
+                                     int(w * k * 0.92), int(h * k * 0.9)))
+            self.cache[r] = s
+        return s
+
+    def draw(self, surf, x, y, r):
+        lift = max(0.0, min(1.0, (settings.H - y) / settings.H))
+        sh = self.get(r * (1.0 - 0.25 * lift))
+        sh.set_alpha(int(255 * (1.0 - 0.55 * lift)))
+        surf.blit(sh, sh.get_rect(center=(x + 10 + 34 * lift, y + r * 0.78 + 16 + 40 * lift)))
+
+
+class Flashes:
+    """Bright cut lines and expanding shockwave rings."""
+
+    def __init__(self):
+        self.cuts = []
+        self.rings = []
+
+    def cut(self, x, y, dx, dy, length):
+        n = math.hypot(dx, dy) or 1.0
+        ux, uy = dx / n, dy / n
+        self.cuts.append([x - ux * length, y - uy * length, x + ux * length, y + uy * length, 0.16])
+
+    def ring(self, x, y, color, size=1.0):
+        self.rings.append([x, y, 0.0, color, size])
+
+    def update(self, dt):
+        for c in self.cuts:
+            c[4] -= dt
+        self.cuts = [c for c in self.cuts if c[4] > 0]
+        for r in self.rings:
+            r[2] += dt
+        self.rings = [r for r in self.rings if r[2] < 0.55]
+
+    def draw(self, surf):
+        for x0, y0, x1, y1, life in self.cuts:
+            k = life / 0.16
+            pygame.draw.line(surf, (255, 255, 255), (x0, y0), (x1, y1), max(1, int(7 * k)))
+            pygame.draw.line(surf, (255, 240, 200), (x0, y0), (x1, y1), max(1, int(2 * k)))
+        for x, y, t, col, size in self.rings:
+            k = t / 0.55
+            pygame.draw.circle(surf, col, (int(x), int(y)), int((30 + 330 * k) * size), max(1, int(14 * (1 - k))))

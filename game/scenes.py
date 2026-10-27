@@ -302,6 +302,20 @@ class Menu(Scene):
         ui.blit_text(s, "DAILY CHALLENGE" + ("  - DONE!" if done else ""), 15, (dr.x + 14, dr.y + 8),
                      (255, 210, 74) if not done else (140, 240, 100), "topleft", outline=None)
         ui.blit_text(s, ch["text"], 22, (dr.x + 14, dr.y + 36), (255, 255, 255), "midleft")
+        nb = progress.next_board(a.save)
+        pr = pygame.Rect(self.CX + 20, 530, 856, 30)
+        s.blit(ui.panel(pr.w, pr.h, (30, 16, 40, 200), (255, 210, 74), 14), pr.topleft)
+        if nb:
+            frac = min(1.0, nb[2] / nb[1])
+            bar = pygame.Rect(pr.x + 372, pr.y + 8, 460, 14)
+            pygame.draw.rect(s, (20, 10, 24), bar, border_radius=7)
+            if frac > 0:
+                pygame.draw.rect(s, (255, 190, 60), (bar.x, bar.y, max(8, int(bar.w * frac)), bar.h), border_radius=7)
+            ui.blit_text(s, f"Next board: {settings.BOARD_NAMES[nb[0]]}", 17, (pr.x + 14, pr.centery), (255, 230, 150),
+                         "midleft")
+            ui.blit_text(s, f"{nb[2]} / {nb[1]}", 14, (bar.centerx, bar.centery), outline=(20, 10, 24), ow=1)
+        else:
+            ui.blit_text(s, "Every board unlocked - you are a master chef!", 17, pr.center, (140, 240, 100))
         for b in self.btns:
             b.draw(s)
         name = a.save.get("name") or "?"
@@ -415,7 +429,7 @@ class Unlocks(Scene):
         self.btn = ui.Button("Back", W // 2, 604, self.close, 200, 46)
         self.t = 0.0
         self.blade_rects = {b: pygame.Rect(70 + i * 178, 160, 160, 130) for i, b in enumerate(settings.BLADES)}
-        self.bg_rects = {b: pygame.Rect(70 + i * 220, 370, 200, 140) for i, b in enumerate(settings.THEMES)}
+        self.bg_rects = {b: pygame.Rect(48 + i * 150, 370, 140, 91) for i, b in enumerate(settings.BOARDS)}
         self.thumbs = {}
 
     def close(self):
@@ -424,7 +438,10 @@ class Unlocks(Scene):
 
     def thumb(self, name):
         if name not in self.thumbs:
-            self.thumbs[name] = pygame.transform.smoothscale(self.app.art.theme(name).static, (200, 130))
+            t = pygame.transform.smoothscale(self.app.art.theme(name).static, (140, 91))
+            if name not in self.app.save["unlocks"]["bg"]:
+                t.fill((70, 70, 80), special_flags=pygame.BLEND_RGB_MULT)
+            self.thumbs[name] = t
         return self.thumbs[name]
 
     def update(self, dt):
@@ -452,7 +469,7 @@ class Unlocks(Scene):
         a = self.app
         a.backdrop.draw(s)
         s.blit(ui.panel(920, 560, (30, 16, 40, 225)), (40, 40))
-        ui.blit_text(s, "Blades & Backdrops", 40, (W // 2, 84), (255, 210, 74))
+        ui.blit_text(s, "Blades & Boards", 40, (W // 2, 84), (255, 210, 74))
         ui.blit_text(s, "Blades", 22, (70, 130), (255, 255, 255), "midleft")
         for b, r in self.blade_rects.items():
             own = b in a.save["unlocks"]["blade"]
@@ -464,19 +481,17 @@ class Unlocks(Scene):
             req = progress.unlock_text(progress.UNLOCKS["blade"][b])
             ui.blit_text(s, "Equipped" if sel else req, 14, (r.centerx, r.bottom - 14),
                          (140, 240, 100) if sel else (230, 220, 210), outline=None)
-        ui.blit_text(s, "Backdrops", 22, (70, 340), (255, 255, 255), "midleft")
+        ui.blit_text(s, "Cutting boards - score high to unlock better ones", 22, (70, 340), (255, 255, 255), "midleft")
         for b, r in self.bg_rects.items():
             own = b in a.save["unlocks"]["bg"]
             sel = a.save["bg"] == b
-            if own:
-                s.blit(self.thumb(b), r.topleft)
-            else:
-                pygame.draw.rect(s, (40, 30, 55), r, border_radius=10)
-                ui.blit_text(s, "LOCKED", 22, r.center, (200, 190, 210))
-            pygame.draw.rect(s, (120, 240, 100) if sel else (255, 210, 74) if own else (90, 80, 100), r, 4, border_radius=10)
-            ui.blit_text(s, b.title(), 20, (r.x + 8, r.y + 6), anchor="topleft")
+            s.blit(self.thumb(b), r.topleft)
+            if not own:
+                ui.blit_text(s, "LOCKED", 18, r.center, (230, 225, 235))
+            pygame.draw.rect(s, (120, 240, 100) if sel else (255, 210, 74) if own else (90, 80, 100), r, 4, border_radius=8)
+            ui.blit_text(s, settings.BOARD_NAMES[b], 14, (r.centerx, r.bottom + 16), outline=(40, 15, 5), ow=1)
             req = progress.unlock_text(progress.UNLOCKS["bg"][b])
-            ui.blit_text(s, "Selected" if sel else req, 14, (r.centerx, r.bottom + 14),
+            ui.blit_text(s, "On the table" if sel else req, 14, (r.centerx, r.bottom + 34),
                          (140, 240, 100) if sel else (230, 220, 210), outline=None)
         self.btn.draw(s)
 

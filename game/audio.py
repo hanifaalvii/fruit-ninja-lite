@@ -59,10 +59,10 @@ class Audio:
             pass
 
     def steps(self):
-        out = [("Sharpening sounds", lambda: [self.load_sfx(n) for n in SFX if n not in self.sounds]),
-               ("Tuning the menu theme", lambda: self.load_music("menu")),
-               ("Tuning the battle theme", lambda: self.load_music("play")),
-               ("Tuning the tense theme", lambda: self.load_music("tense"))]
+        out = [("Tuning sound FX", lambda: [self.load_sfx(n) for n in SFX if n not in self.sounds]),
+               ("Loading menu synth", lambda: self.load_music("menu")),
+               ("Loading battle synth", lambda: self.load_music("play")),
+               ("Loading danger synth", lambda: self.load_music("tense"))]
         return out
 
     # --------------------------------------------------------------- playback

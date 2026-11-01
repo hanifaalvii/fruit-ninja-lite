@@ -3,6 +3,7 @@
 A Fruit Ninja style game in Python (pygame-ce). Runs on desktop and in the browser (phone + desktop) via pygbag.
 
 - 4 modes: Classic, Arcade, Zen, Sudden Death, each on Easy / Normal / Hard
+- Cyberpunk / techno look: neon chamfered panels, glitch logo, neon HUD, a boot-sequence loading screen where you slice fruit sitting on a cutting board, and a matching pre-game web page (`web/pygbag.tmpl`)
 - 3D-look fruit (cached shaded sprites whose highlights stay fixed while they tumble), a top-down cutting-board table with six boards (pine, bamboo, walnut, marble, gilded slate, royal gold) that unlock as your best score climbs, knife scars that build up as you slice, drifting light, soft shadows, cut flashes, screen shake and slow-motion on bombs, glowing blade trails
 - Interactive loading screen (slice the fruit while the game loads), real music (menu / battle / tense) and layered sound effects
 - Combos (x2 to x5), multi-fruit swipe bonus, power-ups (slow-mo, double score, fruit rain), a giant watermelon boss every 8th Classic wave

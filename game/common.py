@@ -65,13 +65,13 @@ class BoardPanel:
         r = self.rect()
         b = self.app.board
         surf.blit(ui.panel(self.PW, self.PH, radius=22), r.topleft)
-        gold = (255, 210, 74)
-        ui.blit_text(surf, "TOP 3", 20, (r.x + 14, r.y + 12), gold, "topleft")
-        medals = [(255, 210, 74), (200, 205, 215), (205, 127, 50)]
+        gold = (252, 238, 10)
+        ui.blit_text(surf, "TOP 3 // GLOBAL", 18, (r.x + 14, r.y + 12), ui.CYAN, "topleft")
+        medals = [(252, 238, 10), (0, 240, 255), (255, 42, 109)]
         for i, row in enumerate(b.rows):
             cy = r.y + 72 + i * 46
             pygame.draw.circle(surf, medals[i], (r.x + 30, cy), 14)
-            ui.blit_text(surf, str(i + 1), 18, (r.x + 30, cy), (40, 20, 5), outline=None)
+            ui.blit_text(surf, str(i + 1), 18, (r.x + 30, cy), (12, 6, 20), outline=None)
             ui.blit_text(surf, row["name"], 18, (r.x + 54, cy), anchor="midleft")
             ui.blit_text(surf, str(row["score"]), 18, (r.x + 262, cy), gold, "midright")
             ui.blit_text(surf, SHORT[row["mode"]], 14, (r.x + 270, cy), (230, 210, 180), "midleft", outline=None)

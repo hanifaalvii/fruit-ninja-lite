@@ -11,19 +11,19 @@ var old=document.getElementById('nm_ov'); if(old) old.remove();
 window.__nm=undefined;
 var first=__FIRST__==1, cur=__CUR__;
 var ov=document.createElement('div'); ov.id='nm_ov';
-ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;z-index:99999;font-family:sans-serif';
-ov.innerHTML='<div style="background:#2b1d12;border:3px solid #ffb347;border-radius:18px;padding:22px 26px;width:min(86vw,360px);text-align:center;color:#fff">'
-+'<div style="font-size:22px;font-weight:bold;color:#ffb347">Enter your nickname</div>'
+ov.style.cssText='position:fixed;inset:0;background:rgba(4,2,12,.8);display:flex;align-items:center;justify-content:center;z-index:99999;font-family:sans-serif';
+ov.innerHTML='<div style="background:#0a0618;border:2px solid #00f0ff;box-shadow:0 0 28px rgba(0,240,255,.5);clip-path:polygon(16px 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%,0 16px);padding:24px 28px;width:min(86vw,380px);text-align:center;color:#fff;letter-spacing:.06em">'
++'<div style="font-size:22px;font-weight:bold;color:#fcee0a;letter-spacing:.2em;text-transform:uppercase">Choose a nickname</div>'
 +'<div style="font-size:14px;margin:8px 0 14px;opacity:.85">Do NOT use your real name.<br>It shows on the public leaderboard.</div>'
-+'<input id="nm_in" maxlength="12" autocomplete="off" placeholder="Nickname" style="width:100%;box-sizing:border-box;font-size:20px;padding:10px;border-radius:10px;border:2px solid #ffb347;text-align:center">'
-+'<button id="nm_ok" style="margin-top:14px;font-size:20px;padding:10px 28px;border:0;border-radius:12px;background:#ff7a1a;color:#fff;font-weight:bold">Play!</button>'
-+(first?'':'<button id="nm_x" style="margin:14px 0 0 10px;font-size:16px;padding:10px 16px;border:0;border-radius:12px;background:#555;color:#fff">Cancel</button>')
++'<input id="nm_in" maxlength="12" autocomplete="off" placeholder="Nickname" style="width:100%;box-sizing:border-box;font-size:20px;padding:10px;border-radius:0;border:2px solid #00f0ff;background:#120a28;color:#fff;text-align:center;outline:none">'
++'<button id="nm_ok" style="margin-top:14px;font-size:20px;padding:10px 28px;border:0;border-radius:0;background:#fcee0a;color:#0a0618;font-weight:bold;letter-spacing:.2em;clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px)">PLAY</button>'
++(first?'':'<button id="nm_x" style="margin:14px 0 0 10px;font-size:16px;padding:10px 16px;border:0;border-radius:0;background:#2a1f45;color:#fff;letter-spacing:.15em">CANCEL</button>')
 +'</div>';
 document.body.appendChild(ov);
 var inp=document.getElementById('nm_in'); inp.value=cur;
 ['keydown','keyup','keypress'].forEach(function(e){inp.addEventListener(e,function(ev){ev.stopPropagation();if(e=='keydown'&&ev.key=='Enter')ok();});});
 function done(v){ov.remove();window.__nm=v;}
-function ok(){var v=inp.value.trim(); if(!v){inp.style.borderColor='red';return;} done(v);}
+function ok(){var v=inp.value.trim(); if(!v){inp.style.borderColor='#ff2a6d';return;} done(v);}
 document.getElementById('nm_ok').onclick=ok;
 var x=document.getElementById('nm_x'); if(x) x.onclick=function(){done('\\x00');};
 setTimeout(function(){inp.focus();},50);

@@ -13,20 +13,55 @@ from .world import additive_glow
 
 W, H = settings.W, settings.H
 TIPS = [
-    "Slice fruit in quick chains for a bigger combo multiplier!",
-    "Cut 3 or more fruit in a single swipe for a bonus.",
-    "Bombs hurt. Let them fall!",
-    "Grab the glowing orbs: slow-mo, double score and fruit rain.",
-    "Every 8th wave in Classic brings a giant watermelon. Keep slicing!",
-    "Score big to unlock new blades and backgrounds.",
-    "Finish today's daily challenge for an achievement.",
+    "CHAIN FRUIT FAST FOR A BIGGER COMBO MULTIPLIER",
+    "SLICE 3 OR MORE FRUIT IN ONE SWIPE FOR A BONUS",
+    "BOMBS HURT. LET THEM FALL",
+    "GRAB GLOWING ORBS: SLOW-MO, DOUBLE SCORE, FRUIT RAIN",
+    "EVERY 8TH CLASSIC WAVE BRINGS A GIANT WATERMELON",
+    "HIGH SCORES UNLOCK BETTER CUTTING BOARDS AND BLADES",
+    "FINISH THE DAILY CONTRACT FOR A BONUS ACHIEVEMENT",
 ]
-CARD_COLORS = {"classic": (214, 70, 40), "arcade": (232, 140, 20), "zen": (50, 160, 90), "sudden": (130, 70, 190)}
+MODE_COLORS = {"classic": ui.MAGENTA, "arcade": ui.YELLOW, "zen": ui.CYAN, "sudden": ui.VIOLET}
+MODE_TAGS = {"classic": "MODE 01", "arcade": "MODE 02", "zen": "MODE 03", "sudden": "MODE 04"}
+
+
+def glitch_blit(dst, img, center, t, strength=1.0):
+    """Blit an image; during glitch bursts it tears into horizontally shifted strips."""
+    r = img.get_rect(center=center)
+    phase = t % 3.4
+    if phase < 0.16:
+        rng = random.Random(int(t * 40))
+        sh = img.get_height() // 7
+        for k in range(7):
+            off = int(rng.uniform(-26, 26) * strength) if rng.random() < 0.6 else 0
+            strip = img.subsurface((0, k * sh, img.get_width(), sh if k < 6 else img.get_height() - 6 * sh))
+            dst.blit(strip, (r.x + off, r.y + k * sh))
+    else:
+        dst.blit(img, r)
+
+
+def segment_bar(s, rect, frac, t, segs=36):
+    """Chamfered neon bar made of segments; the leading segment pulses yellow."""
+    s.blit(ui.neon_box(rect.w, rect.h, ui.CYAN, cut=10, glow=1.0), ui.neon_box(rect.w, rect.h, ui.CYAN).get_rect(
+        center=rect.center))
+    inner = rect.inflate(-18, -14)
+    gap = inner.w / segs
+    lit = frac * segs
+    for i in range(segs):
+        x = inner.x + i * gap
+        if i + 1 <= lit:
+            col = ui.lerp_col(ui.CYAN, ui.MAGENTA, i / segs)
+        elif i < lit:
+            col = ui.lerp_col((40, 28, 70), ui.YELLOW, 0.5 + 0.5 * math.sin(t * 14))
+        else:
+            col = (34, 24, 60)
+        pygame.draw.rect(s, col, (x + 1, inner.y, max(2, gap - 3), inner.h))
 
 
 # ------------------------------------------------------------------- loading
 class Loading(Scene):
     def enter(self, loader=None):
+        a = self.app
         self.loader = loader
         self.items, self.pieces = [], []
         self.parts = Particles(60 if settings.WEB else 120)
@@ -38,22 +73,38 @@ class Loading(Scene):
         self.last = None
         self.p = 0.0
         self.ready = False
+        self.ready_t = 0.0
         self.tip = random.randrange(len(TIPS))
         self.tip_t = 0.0
         self.pulse = 0.0
-        self.grad = pygame.Surface((W, H))
-        for y in range(H):
-            self.grad.fill(ui.lerp_col((255, 140, 60), (96, 30, 120), y / H), (0, y, W, 1))
-        self.rays = None
-        self.logo_img = None
+        self.board = a.art.theme("walnut").static
+        self.glow = None
+        self.rest = []
+        self.rest_pos = [(150, 470), (300, 520), (700, 515), (850, 465), (500, 560)]
+        self.hit_glow = None
+        self.shadow = None
+
+    def spawn_rest(self):
+        a = self.app
+        if not a.art.fruit or self.rest:
+            return
+        names = list(a.art.fruit)
+        for i, (x, y) in enumerate(self.rest_pos):
+            n = names[(i * 2 + 1) % len(names)]
+            self.rest.append({"name": n, "x": x, "y": y, "rot": random.uniform(0, 360), "alive": True, "back": 0.0,
+                              "ph": random.uniform(0, 6.28)})
 
     def update(self, dt):
         a = self.app
         self.t += dt
+        if self.glow is None and a.art.glow is not None:
+            self.glow = additive_glow(a.art.glow, 640, (30, 70, 110))
+            self.hit_glow = additive_glow(a.art.glow, 150, (255, 210, 230))
         if self.loader and not self.loader.done:
             self.loader.step(0.006)
         elif not self.ready:
             self.ready = True
+        self.spawn_rest()
         target = self.loader.progress if self.loader else 1.0
         self.p += (target - self.p) * min(1.0, dt * 8)
         self.pulse = max(0.0, self.pulse - dt * 3)
@@ -67,17 +118,29 @@ class Loading(Scene):
             x = random.uniform(120, W - 120)
             self.items.append(Item("fruit", art, name, art.r, x, H + 60, (W / 2 - x) * random.uniform(0.1, 0.35),
                                    -random.uniform(780, 980), random.uniform(-200, 200)))
-            self.spawn = random.uniform(0.3, 0.7)
+            self.spawn = random.uniform(0.35, 0.8)
         for it in self.items:
             it.update(dt, 900)
         self.items = [i for i in self.items if i.alive and i.y < H + 140]
+        for r in self.rest:
+            if not r["alive"]:
+                r["back"] -= dt
+                if r["back"] <= 0:
+                    r["alive"] = True
         for p in self.pieces:
             p.update(dt, 900)
         self.pieces = [p for p in self.pieces if p.y < H + 160]
         self.parts.update(dt)
         self.trail.update(a.now)
-        if self.ready and a.audio.cur is None and a.audio.music_snd:
-            a.audio.music("menu")
+        if self.ready:
+            self.ready_t += dt
+            if self.ready_t > 1.1:
+                self.finish()
+
+    def finish(self):
+        a = self.app
+        a.audio.music("menu")
+        a.go("menu")
 
     def _cut(self, a, b):
         ax, ay = a
@@ -88,20 +151,24 @@ class Loading(Scene):
         for it in self.items:
             if it.alive and seg_dist(it.x, it.y, ax, ay, bx, by) < it.r + 8:
                 it.alive = False
-                self.sliced += 1
-                self.pulse = 1.0
-                split_fruit(it.art, it.x, it.y, it.vx, it.vy, dx, dy, self.pieces)
-                self.parts.burst(it.x, it.y, settings.FRUIT_JUICE[it.name], 16, 340)
-                self.app.audio.slice_fruit(it.name)
+                self.hit(it.art, it.name, it.x, it.y, it.vx, it.vy, dx, dy)
+        for r in self.rest:
+            if r["alive"]:
+                art = self.app.art.fruit[r["name"]]
+                if seg_dist(r["x"], r["y"], ax, ay, bx, by) < art.r + 8:
+                    r["alive"], r["back"] = False, 2.2
+                    self.hit(art, r["name"], r["x"], r["y"], 0, -120, dx, dy)
+
+    def hit(self, art, name, x, y, vx, vy, dx, dy):
+        self.sliced += 1
+        self.pulse = 1.0
+        split_fruit(art, x, y, vx, vy, dx, dy, self.pieces)
+        self.parts.burst(x, y, settings.FRUIT_JUICE[name], 18, 360, up=120)
+        self.app.audio.slice_fruit(name)
 
     def handle(self, e):
         a = self.app
         if e.type == pygame.MOUSEBUTTONDOWN and e.button == 1:
-            if self.ready:
-                a.audio.sfx("click")
-                a.audio.music("menu")
-                a.go("menu")
-                return
             self.down, self.last = True, e.pos
             self.trail.clear()
         elif e.type == pygame.MOUSEBUTTONUP:
@@ -111,16 +178,24 @@ class Loading(Scene):
             self._cut(self.last or e.pos, e.pos)
             self.last = e.pos
         elif e.type == pygame.KEYDOWN and self.ready and e.key in (pygame.K_RETURN, pygame.K_SPACE):
-            a.audio.music("menu")
-            a.go("menu")
+            self.finish()
 
     def draw(self, s):
         a = self.app
-        s.blit(self.grad, (0, 0))
-        if a.art.glow is not None:
-            if self.rays is None:
-                self.rays = additive_glow(a.art.glow, 700, (255, 170, 90))
-            s.blit(self.rays, self.rays.get_rect(center=(W // 2, H // 2 - 30)), special_flags=pygame.BLEND_RGB_ADD)
+        s.blit(self.board, (0, 0))
+        if self.glow is not None:
+            s.blit(self.glow, self.glow.get_rect(center=(W // 2, 250)), special_flags=pygame.BLEND_RGB_ADD)
+        sh = a.backdrop.shadows if hasattr(a.backdrop, "shadows") else None
+        for r in self.rest:
+            if r["alive"] and a.art.fruit:
+                art = a.art.fruit[r["name"]]
+                bob = math.sin(self.t * 1.6 + r["ph"]) * 3
+                img = art.frame(r["rot"] + math.sin(self.t * 0.8 + r["ph"]) * 6)
+                shd = pygame.Surface((art.r * 2, art.r), pygame.SRCALPHA) if sh is None else None
+                if shd is not None:
+                    pygame.draw.ellipse(shd, (0, 0, 0, 90), shd.get_rect())
+                    s.blit(shd, shd.get_rect(center=(r["x"] + 8, r["y"] + art.r * 0.8)))
+                s.blit(img, img.get_rect(center=(r["x"], r["y"] + bob)))
         for p in self.pieces:
             p.draw(s)
         for it in self.items:
@@ -129,28 +204,26 @@ class Loading(Scene):
         self.trail.draw(s, a.save["blade"], a.now)
         logo = a.art.logo
         if logo is not None:
-            if self.logo_img is None:
-                self.logo_img = pygame.transform.smoothscale(logo, (int(logo.get_width() * 0.64), int(logo.get_height() * 0.64)))
-            s.blit(self.logo_img, self.logo_img.get_rect(center=(W // 2, 150 + 8 * math.sin(self.t * 2.4))))
-        bar = pygame.Rect(0, 0, 460, 26)
-        bar.center = (W // 2, H // 2 + 70)
-        pygame.draw.rect(s, (30, 12, 30), bar.inflate(8, 8), border_radius=18)
-        fill = bar.copy()
-        fill.w = max(0, int(bar.w * self.p))
-        if fill.w > 6:
-            pygame.draw.rect(s, ui.lerp_col((120, 220, 60), (255, 220, 60), self.pulse), fill, border_radius=13)
-            pygame.draw.rect(s, (255, 255, 255, 90), fill.inflate(-8, -16).move(0, -5), border_radius=6)
-        pygame.draw.rect(s, (255, 210, 74), bar.inflate(8, 8), 3, border_radius=18)
+            k = 0.66 + 0.012 * math.sin(self.t * 2.4)
+            if self.logo_img is None or abs(k - self.logo_k) > 0.004:
+                self.logo_img = pygame.transform.smoothscale(logo, (int(logo.get_width() * k), int(logo.get_height() * k)))
+                self.logo_k = k
+            glitch_blit(s, self.logo_img, (W // 2, 140 + 6 * math.sin(self.t * 1.9)), self.t)
+        bar = pygame.Rect(0, 0, 560, 34)
+        bar.center = (W // 2, 300)
+        segment_bar(s, bar, self.p, self.t)
+        label = (self.loader.label if self.loader else "").upper()
         if self.ready:
-            pulse = 1.0 + 0.06 * math.sin(self.t * 6)
-            ui.blit_text(s, "TAP TO START", 40, (W // 2, H // 2 + 125), (255, 240, 120), scale=pulse)
+            ui.blit_text(s, "SYSTEM ONLINE", 30, (W // 2, 352), ui.GREEN)
         else:
-            label = self.loader.label if self.loader else ""
-            ui.blit_text(s, f"{label}...  {int(self.p * 100)}%", 20, (W // 2, H // 2 + 118), (255, 240, 220))
-        ui.blit_text(s, TIPS[self.tip], 20, (W // 2, H - 62), (255, 230, 170))
-        ui.blit_text(s, "Swipe to slice the fruit while you wait!", 18, (W // 2, H - 30), (255, 255, 255))
-        if self.sliced:
-            ui.blit_text(s, f"Sliced: {self.sliced}", 30, (W // 2, 36))
+            ui.blit_text(s, f"> {label}...", 20, (bar.x, 352), ui.CYAN, "midleft")
+            ui.blit_text(s, f"{int(self.p * 100)}%", 26, (bar.right, 352), ui.YELLOW, "midright")
+        ui.blit_text(s, "FRUIT-OS // BOOT SEQUENCE v2.077", 18, (28, 26), (170, 190, 210), "topleft", outline=ui.INK)
+        ui.blit_text(s, f"SLICED {self.sliced:03d}", 24, (W - 30, 26), ui.MAGENTA, "topright")
+        ui.blit_text(s, "[ SWIPE TO SLICE WHILE THE SYSTEM LOADS ]", 20, (W // 2, H - 84), ui.YELLOW)
+        ui.blit_text(s, "TIP // " + TIPS[self.tip], 18, (W // 2, H - 52), (210, 225, 240))
+    logo_img = None
+    logo_k = 0.0
 
 
 # ---------------------------------------------------------------------- menu
@@ -171,22 +244,22 @@ class Menu(Scene):
         self.last = None
         self.hover = {m: 0.0 for m in settings.MODE_ORDER}
         self.panel = BoardPanel(a)
-        grey = (96, 70, 130)
         self.btns = []
-        x0, y = 40, 600
-        for i, (label, cb) in enumerate([("Awards", lambda: a.go("achievements")),
-                                         ("Unlocks", lambda: a.go("unlocks")),
-                                         ("Sound", lambda: a.go("settings", back="menu")),
-                                         ("Name", lambda: a.ask_name(None)),
-                                         ("Fullscreen", a.toggle_fullscreen)]):
-            self.btns.append(ui.Button(label, x0 + 80 + i * 164, y, cb, 150, 42, grey, 20))
+        x0, y = 40, 604
+        for i, (label, cb) in enumerate([("AWARDS", lambda: a.go("achievements")),
+                                         ("UNLOCKS", lambda: a.go("unlocks")),
+                                         ("SOUND", lambda: a.go("settings", back="menu")),
+                                         ("NAME", lambda: a.ask_name(None)),
+                                         ("FULLSCREEN", a.toggle_fullscreen)]):
+            self.btns.append(ui.Button(label, x0 + 80 + i * 164, y, cb, 150, 40, ui.CYAN, 20))
         self.diff_rects = {}
         for i, d in enumerate(settings.DIFFICULTY_ORDER):
             self.diff_rects[d] = pygame.Rect(self.CX + 20 + i * 138, 466, 130, 38)
         a.board.refresh(pygame.time.get_ticks(), force=True)
         logo = a.art.logo
         self.logo_img = pygame.transform.smoothscale(logo, (int(logo.get_width() * 0.5), int(logo.get_height() * 0.5)))
-        self.card_glow = pygame.transform.smoothscale(a.art.glow, (150, 150))
+        self.card_glow = {m: additive_glow(a.art.glow, 190, ui.lerp_col(MODE_COLORS[m], (0, 0, 0), 0.55))
+                          for m in settings.MODE_ORDER}
 
     def card_rect(self, i):
         return pygame.Rect(self.CX + i * (self.CW + self.GAP), self.CY, self.CW, self.CH)
@@ -221,7 +294,7 @@ class Menu(Scene):
         mode = settings.MODE_ORDER[i]
         r = self.card_rect(i)
         art = a.art.fruit[settings.MODE_FRUIT[mode]]
-        cx, cy = r.centerx, r.y + 100
+        cx, cy = r.centerx, r.y + 104
         split_fruit(art, cx, cy, 0, -150, 1, -0.4, self.pieces)
         self.parts.burst(cx, cy, settings.FRUIT_JUICE[settings.MODE_FRUIT[mode]], 30, 380)
         a.audio.slice_fruit(settings.MODE_FRUIT[mode])
@@ -255,71 +328,91 @@ class Menu(Scene):
             if self.last:
                 for i in range(4):
                     r = self.card_rect(i)
-                    if seg_dist(r.centerx, r.y + 100, *self.last, *e.pos) < 55:
+                    if seg_dist(r.centerx, r.y + 104, *self.last, *e.pos) < 55:
                         self.choose(i)
             self.last = e.pos
 
     def draw(self, s):
         a = self.app
         a.backdrop.draw(s)
-        s.blit(self.logo_img, self.logo_img.get_rect(center=(470, 80 + 5 * math.sin(self.t * 1.8))))
+        glitch_blit(s, self.logo_img, (470, 84 + 5 * math.sin(self.t * 1.8)), self.t, 0.6)
         mx, my = a.mouse
         for i, mode in enumerate(settings.MODE_ORDER):
             r = self.card_rect(i)
             h = self.hover[mode]
             r = r.move(0, int(-10 * h))
-            col = CARD_COLORS[mode]
-            s.blit(ui.pill(r.w, r.h, col, 28), r.topleft)
+            col = MODE_COLORS[mode]
+            box = ui.neon_box(r.w, r.h, col, cut=22)
+            s.blit(box, box.get_rect(center=r.center))
+            if h > 0.02:
+                hot = ui.neon_box(r.w, r.h, ui.lerp_col(col, (255, 255, 255), 0.3), fill=ui.lerp_col(ui.INK, col, 0.3),
+                                  alpha=225, cut=22, glow=2.2).copy()
+                hot.set_alpha(int(255 * h))
+                s.blit(hot, hot.get_rect(center=r.center))
             fname = settings.MODE_FRUIT[mode]
             art = a.art.fruit[fname]
             ox = (mx - r.centerx) / r.w * 16 * h
-            oy = (my - (r.y + 100)) / r.h * 16 * h
-            g = self.card_glow
-            s.blit(g, g.get_rect(center=(r.centerx + ox * 0.5, r.y + 100 + oy * 0.5)))
+            oy = (my - (r.y + 104)) / r.h * 16 * h
+            g = self.card_glow[mode]
+            s.blit(g, g.get_rect(center=(r.centerx + ox * 0.5, r.y + 104 + oy * 0.5)), special_flags=pygame.BLEND_RGB_ADD)
+            ui.blit_text(s, MODE_TAGS[mode], 14, (r.x + 16, r.y + 14), col, "topleft", outline=ui.INK, ow=1)
             if not (self.pending and self.pending[0] == mode):
                 spin = self.t * (30 + 70 * h) + i * 70
                 img = art.frame(spin)
-                s.blit(img, img.get_rect(center=(r.centerx + ox, r.y + 100 + oy + 5 * math.sin(self.t * 2 + i))))
+                s.blit(img, img.get_rect(center=(r.centerx + ox, r.y + 104 + oy + 5 * math.sin(self.t * 2 + i))))
             title, sub = settings.MODES[mode]
-            ui.blit_text(s, title, 28 if len(title) < 10 else 23, (r.centerx, r.y + 178))
+            ui.blit_text(s, title.upper(), 24 if len(title) < 10 else 19, (r.centerx, r.y + 176), (255, 255, 255))
             for j, line in enumerate(sub.split(" - ")[:2]):
-                ui.blit_text(s, line, 14, (r.centerx, r.y + 202 + j * 17), (255, 240, 210), outline=(60, 20, 10), ow=1)
-            ui.blit_text(s, f"Best {a.save['best'].get(mode, 0)}", 15, (r.centerx, r.bottom - 12), (255, 230, 120))
+                ui.blit_text(s, line.upper(), 14, (r.centerx, r.y + 202 + j * 16), (190, 215, 235), outline=ui.INK, ow=1)
+            ui.blit_text(s, f"HI-SCORE {a.save['best'].get(mode, 0)}", 15, (r.centerx, r.bottom - 14), ui.YELLOW,
+                         outline=ui.INK, ow=1)
         for p in self.pieces:
             p.draw(s)
         self.parts.draw(s)
-        # difficulty selector
-        ui.blit_text(s, "Difficulty", 18, (self.CX + 20, 452), (255, 255, 255), "midleft")
+        ui.blit_text(s, "DIFFICULTY", 18, (self.CX + 20, 450), ui.CYAN, "midleft")
         for d, r in self.diff_rects.items():
             on = a.save["difficulty"] == d
-            col = {"easy": (60, 170, 90), "normal": (232, 160, 30), "hard": (210, 60, 60)}[d]
-            s.blit(ui.pill(r.w, r.h, col if on else (90, 80, 100), 18), r.topleft)
-            ui.blit_text(s, settings.DIFFICULTY[d]["label"], 20, r.center, (255, 255, 255) if on else (210, 200, 215))
+            col = {"easy": ui.GREEN, "normal": ui.YELLOW, "hard": ui.MAGENTA}[d]
+            if on:
+                s.blit(ui.neon_box(r.w, r.h, col, solid=True, cut=10, glow=1.6), ui.neon_box(r.w, r.h, col, solid=True,
+                       cut=10, glow=1.6).get_rect(center=r.center))
+            else:
+                box = ui.neon_box(r.w, r.h, ui.lerp_col(col, (40, 30, 70), 0.55), cut=10, glow=0.4)
+                s.blit(box, box.get_rect(center=r.center))
+            ui.blit_text(s, settings.DIFFICULTY[d]["label"].upper(), 20, r.center, (12, 6, 20) if on else (220, 225, 240),
+                         outline=None if on else ui.INK)
         ch, st = progress.daily_state(a.save)
         done = st["done"]
         dr = pygame.Rect(self.CX + 440, 452, 436, 62)
-        s.blit(ui.panel(dr.w, dr.h, (30, 16, 40, 200), (255, 210, 74) if not done else (120, 220, 90), 16), dr.topleft)
-        ui.blit_text(s, "DAILY CHALLENGE" + ("  - DONE!" if done else ""), 15, (dr.x + 14, dr.y + 8),
-                     (255, 210, 74) if not done else (140, 240, 100), "topleft", outline=None)
-        ui.blit_text(s, ch["text"], 22, (dr.x + 14, dr.y + 36), (255, 255, 255), "midleft")
+        dcol = ui.GREEN if done else ui.YELLOW
+        box = ui.neon_box(dr.w, dr.h, dcol, cut=14)
+        s.blit(box, box.get_rect(center=dr.center))
+        ui.blit_text(s, "DAILY CONTRACT" + ("  // COMPLETE" if done else ""), 15, (dr.x + 18, dr.y + 11), dcol, "topleft",
+                     outline=None)
+        ui.blit_text(s, ch["text"].upper(), 21, (dr.x + 18, dr.y + 38), (255, 255, 255), "midleft")
         nb = progress.next_board(a.save)
-        pr = pygame.Rect(self.CX + 20, 530, 856, 30)
-        s.blit(ui.panel(pr.w, pr.h, (30, 16, 40, 200), (255, 210, 74), 14), pr.topleft)
+        pr = pygame.Rect(self.CX + 20, 524, 856, 38)
+        box = ui.neon_box(pr.w, pr.h, ui.VIOLET, cut=12, glow=0.6)
+        s.blit(box, box.get_rect(center=pr.center))
         if nb:
             frac = min(1.0, nb[2] / nb[1])
-            bar = pygame.Rect(pr.x + 372, pr.y + 8, 460, 14)
-            pygame.draw.rect(s, (20, 10, 24), bar, border_radius=7)
-            if frac > 0:
-                pygame.draw.rect(s, (255, 190, 60), (bar.x, bar.y, max(8, int(bar.w * frac)), bar.h), border_radius=7)
-            ui.blit_text(s, f"Next board: {settings.BOARD_NAMES[nb[0]]}", 17, (pr.x + 14, pr.centery), (255, 230, 150),
+            bar = pygame.Rect(pr.x + 380, pr.y + 11, 440, 16)
+            pygame.draw.rect(s, (14, 8, 30), bar)
+            n = 30
+            for k in range(n):
+                if (k + 1) / n <= frac:
+                    pygame.draw.rect(s, ui.lerp_col(ui.VIOLET, ui.MAGENTA, k / n), (bar.x + k * bar.w / n + 1, bar.y, bar.w / n - 3, bar.h))
+                else:
+                    pygame.draw.rect(s, (38, 26, 66), (bar.x + k * bar.w / n + 1, bar.y, bar.w / n - 3, bar.h))
+            ui.blit_text(s, f"NEXT BOARD: {settings.BOARD_NAMES[nb[0]].upper()}", 19, (pr.x + 20, pr.centery), (255, 230, 150),
                          "midleft")
-            ui.blit_text(s, f"{nb[2]} / {nb[1]}", 14, (bar.centerx, bar.centery), outline=(20, 10, 24), ow=1)
+            ui.blit_text(s, f"{nb[2]} / {nb[1]}", 16, (bar.right + 10, bar.centery), (255, 255, 255), "midleft", ow=1)
         else:
-            ui.blit_text(s, "Every board unlocked - you are a master chef!", 17, pr.center, (140, 240, 100))
+            ui.blit_text(s, "ALL BOARDS UNLOCKED // MASTER CHEF", 19, pr.center, ui.GREEN)
         for b in self.btns:
             b.draw(s)
-        name = a.save.get("name") or "?"
-        ui.blit_text(s, f"Player: {name}", 16, (14, 14), (255, 255, 255), "topleft")
+        name = (a.save.get("name") or "?").upper()
+        ui.blit_text(s, f"RUNNER // {name}", 18, (18, 12), (190, 215, 235), "topleft", outline=ui.INK)
         self.panel.draw(s)
         self.trail.draw(s, a.save["blade"], a.now)
 
@@ -331,13 +424,13 @@ class Settings(Scene):
         self.back = back
         self.sl_music = ui.Slider("Music", 400, 250, 340, a.save["music"])
         self.sl_sfx = ui.Slider("Effects", 400, 330, 340, a.save["sfx"])
-        self.btn_mute = ui.Button("", W // 2, 410, self.toggle_mute, 300, 48, (96, 70, 130))
-        self.btn_back = ui.Button("Back", W // 2, 500, self.close, 220, 52)
+        self.btn_mute = ui.Button("", W // 2, 410, self.toggle_mute, 300, 48, ui.CYAN)
+        self.btn_back = ui.Button("BACK", W // 2, 500, self.close, 220, 52, ui.YELLOW, 26, True)
         self.btns = [self.btn_mute, self.btn_back]
         self.sync()
 
     def sync(self):
-        self.btn_mute.label = "Sound: OFF" if self.app.save["mute"] else "Sound: ON"
+        self.btn_mute.label = "SOUND: OFF" if self.app.save["mute"] else "SOUND: ON"
 
     def toggle_mute(self):
         self.app.toggle_mute()
@@ -377,7 +470,7 @@ class Settings(Scene):
         a = self.app
         a.backdrop.draw(s)
         s.blit(ui.panel(560, 420, (30, 16, 40, 225)), (220, 130))
-        ui.blit_text(s, "Sound", 48, (W // 2, 190), (255, 210, 74))
+        ui.blit_text(s, "Sound", 48, (W // 2, 190), (252, 238, 10))
         self.sl_music.draw(s)
         self.sl_sfx.draw(s)
         for b in self.btns:
@@ -387,7 +480,7 @@ class Settings(Scene):
 # -------------------------------------------------------------------- awards
 class Awards(Scene):
     def enter(self, **kw):
-        self.btn = ui.Button("Back", W // 2, 604, self.close, 200, 46)
+        self.btn = ui.Button("BACK", W // 2, 604, self.close, 200, 46, ui.YELLOW, 24, True)
         self.t = 0.0
 
     def close(self):
@@ -410,13 +503,13 @@ class Awards(Scene):
         a.backdrop.draw(s)
         s.blit(ui.panel(920, 560, (30, 16, 40, 225)), (40, 40))
         got = a.save["ach"]
-        ui.blit_text(s, f"Achievements  {len(got)}/{len(progress.ACHIEVEMENTS)}", 40, (W // 2, 84), (255, 210, 74))
+        ui.blit_text(s, f"Achievements  {len(got)}/{len(progress.ACHIEVEMENTS)}", 40, (W // 2, 84), (252, 238, 10))
         for i, (aid, title, desc, _t) in enumerate(progress.ACHIEVEMENTS):
             col, row = i % 2, i // 2
             r = pygame.Rect(70 + col * 440, 130 + row * 74, 420, 64)
             have = aid in got
             s.blit(ui.pill(r.w, r.h, (60, 150, 80) if have else (70, 60, 90), 20), r.topleft)
-            pygame.draw.circle(s, (255, 210, 74) if have else (110, 100, 120), (r.x + 34, r.centery + 2), 20)
+            pygame.draw.circle(s, (252, 238, 10) if have else (110, 100, 120), (r.x + 34, r.centery + 2), 20)
             ui.blit_text(s, "OK" if have else "?", 18, (r.x + 34, r.centery + 2), (60, 30, 10), outline=None)
             ui.blit_text(s, title, 22, (r.x + 70, r.y + 8), (255, 255, 255), "topleft")
             ui.blit_text(s, desc, 14, (r.x + 70, r.y + 38), (235, 225, 210), "topleft", outline=None)
@@ -426,7 +519,7 @@ class Awards(Scene):
 # ------------------------------------------------------------------- unlocks
 class Unlocks(Scene):
     def enter(self, **kw):
-        self.btn = ui.Button("Back", W // 2, 604, self.close, 200, 46)
+        self.btn = ui.Button("BACK", W // 2, 604, self.close, 200, 46, ui.YELLOW, 24, True)
         self.t = 0.0
         self.blade_rects = {b: pygame.Rect(70 + i * 178, 160, 160, 130) for i, b in enumerate(settings.BLADES)}
         self.bg_rects = {b: pygame.Rect(48 + i * 150, 370, 140, 91) for i, b in enumerate(settings.BOARDS)}
@@ -469,12 +562,12 @@ class Unlocks(Scene):
         a = self.app
         a.backdrop.draw(s)
         s.blit(ui.panel(920, 560, (30, 16, 40, 225)), (40, 40))
-        ui.blit_text(s, "Blades & Boards", 40, (W // 2, 84), (255, 210, 74))
+        ui.blit_text(s, "Blades & Boards", 40, (W // 2, 84), (252, 238, 10))
         ui.blit_text(s, "Blades", 22, (70, 130), (255, 255, 255), "midleft")
         for b, r in self.blade_rects.items():
             own = b in a.save["unlocks"]["blade"]
             sel = a.save["blade"] == b
-            s.blit(ui.panel(r.w, r.h, (50, 34, 70, 240), (120, 240, 100) if sel else (255, 210, 74) if own else (90, 80, 100), 16), r.topleft)
+            s.blit(ui.panel(r.w, r.h, (50, 34, 70, 240), (120, 240, 100) if sel else (252, 238, 10) if own else (90, 80, 100), 16), r.topleft)
             if own:
                 self.draw_blade_preview(s, b, r)
             ui.blit_text(s, b.title(), 20, (r.centerx, r.y + 12))
@@ -488,7 +581,7 @@ class Unlocks(Scene):
             s.blit(self.thumb(b), r.topleft)
             if not own:
                 ui.blit_text(s, "LOCKED", 18, r.center, (230, 225, 235))
-            pygame.draw.rect(s, (120, 240, 100) if sel else (255, 210, 74) if own else (90, 80, 100), r, 4, border_radius=8)
+            pygame.draw.rect(s, (120, 240, 100) if sel else (252, 238, 10) if own else (90, 80, 100), r, 4, border_radius=8)
             ui.blit_text(s, settings.BOARD_NAMES[b], 14, (r.centerx, r.bottom + 16), outline=(40, 15, 5), ow=1)
             req = progress.unlock_text(progress.UNLOCKS["bg"][b])
             ui.blit_text(s, "On the table" if sel else req, 14, (r.centerx, r.bottom + 34),
@@ -541,7 +634,7 @@ class NameEntry(Scene):
     def draw(self, s):
         self.app.backdrop.draw(s)
         s.blit(ui.panel(560, 300, (30, 16, 40, 230)), (220, 170))
-        ui.blit_text(s, "Choose a nickname", 42, (W // 2, 225), (255, 210, 74))
+        ui.blit_text(s, "Choose a nickname", 42, (W // 2, 225), (252, 238, 10))
         ui.blit_text(s, "Do NOT use your real name - it shows on the public leaderboard.", 18, (W // 2, 270))
         box = pygame.Rect(0, 0, 360, 60)
         box.center = (W // 2, 340)

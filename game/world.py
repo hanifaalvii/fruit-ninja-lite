@@ -37,9 +37,9 @@ class Backdrop:
         if art.glow is None or self.ready:
             return
         rng = random.Random(4)
-        self.glows = [additive_glow(art.glow, 22, (255, 240, 200)), additive_glow(art.glow, 14, (255, 250, 230)),
-                      additive_glow(art.glow, 30, (255, 220, 160))]
-        self.sweep = additive_glow(art.glow, 520, (44, 36, 24))
+        self.glows = [additive_glow(art.glow, 22, (0, 200, 255)), additive_glow(art.glow, 16, (255, 60, 140)),
+                      additive_glow(art.glow, 30, (140, 90, 255))]
+        self.sweep = additive_glow(art.glow, 560, (8, 40, 52))
         for _ in range(18):
             self.motes.append([rng.uniform(0, W), rng.uniform(0, H), rng.uniform(-10, 10), rng.uniform(-14, -4),
                                rng.uniform(0, 6.28)])

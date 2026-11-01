@@ -13,7 +13,7 @@
 | `entities.py` | Flying items and sliced halves, safe physics step |
 | `assets.py` | Time-sliced `Loader`, `Art` (cached sprites: tumbling body + fixed light overlay) |
 | `audio.py` | OGG effects/music with fallback, music crossfade, ducking |
-| `ui.py` | Cached outlined text, buttons, sliders, panels |
+| `ui.py` | Cyberpunk kit: stroke-drawn techno font, neon chamfered panels, buttons, sliders, procedural logo |
 | `net.py` | Leaderboard + nickname glue (non-blocking) |
 | `progress.py` | Save data, achievements, unlocks, daily challenge (pure logic) |
 | `scoring.py` | Combo, swipe bonus, power-up timers (pure logic) |
@@ -25,3 +25,5 @@ frames only blit; particles and splats are capped; `effects.Quality` drops effec
 Assets load in 6 ms slices so the loading screen stays at full frame rate.
 
 Tests (`tests/`) run headless with SDL dummy drivers: pure logic, every scene and mode, and a frame-time budget.
+
+`web/pygbag.tmpl` is the custom HTML page pygbag wraps around the game (neon boot screen). `deploy.sh` passes it with `--template`.

@@ -38,7 +38,7 @@ BOARD_NAMES = {"pine": "Pine Board", "bamboo": "Bamboo Board", "walnut": "Walnut
 DEFAULT_BOARD = "pine"
 BLADES = ("classic", "flame", "ice", "neon", "rainbow")
 BLADE_COLORS = {
-    "classic": ((255, 255, 255), (170, 220, 255)),
+    "classic": ((255, 255, 255), (0, 235, 255)),
     "flame": ((255, 240, 120), (255, 90, 20)),
     "ice": ((230, 252, 255), (60, 170, 255)),
     "neon": ((255, 255, 255), (255, 40, 220)),

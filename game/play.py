@@ -13,8 +13,8 @@ from .world import additive_glow
 from .scoring import Combo, POWERUPS, PowerUps, swipe_bonus
 
 W, H = settings.W, settings.H
-COMBO_COLORS = {2: (255, 240, 120), 3: (255, 190, 70), 4: (255, 120, 60), 5: (255, 70, 110)}
-PU_COLORS = {"slowmo": (90, 170, 255), "double": (255, 190, 40), "rain": (110, 220, 120)}
+COMBO_COLORS = {2: ui.CYAN, 3: ui.YELLOW, 4: ui.ORANGE, 5: ui.MAGENTA}
+PU_COLORS = {"slowmo": ui.CYAN, "double": ui.YELLOW, "rain": ui.GREEN}
 
 
 class Play(Scene):
@@ -26,6 +26,7 @@ class Play(Scene):
         self.rng = random.Random()
         self.dir = WaveDirector(mode, self.dkey, self.rng)
         self.items, self.pieces, self.texts, self.hits = [], [], [], []
+        self.glows = {}
         self.parts = Particles(a.quality.particle_cap)
         self.splats = SplatLayer(a.art)
         self.trail = BladeTrail()
@@ -63,12 +64,12 @@ class Play(Scene):
         self.result = None
         self.tense = False
         self.panel = BoardPanel(a)
-        self.btn_pause = ui.Button("II", W - 44, 40, self.pause, 58, 46, (96, 70, 130), 22)
-        self.pause_btns = [ui.Button("Resume", W // 2, 270, self.resume, 260, 52),
-                           ui.Button("Sound", W // 2, 340, self.open_sound, 260, 52, (96, 70, 130)),
-                           ui.Button("Menu", W // 2, 410, self.to_menu, 260, 52, (96, 70, 130))]
-        self.over_btns = [ui.Button("Play Again", W // 2 - 140, 560, self.again, 250, 52, (60, 170, 90)),
-                          ui.Button("Menu", W // 2 + 140, 560, self.to_menu, 250, 52, (96, 70, 130))]
+        self.btn_pause = ui.Button("II", W - 44, 40, self.pause, 58, 44, ui.CYAN, 22)
+        self.pause_btns = [ui.Button("RESUME", W // 2, 270, self.resume, 260, 52, ui.YELLOW, 26, True),
+                           ui.Button("SOUND", W // 2, 340, self.open_sound, 260, 52, ui.CYAN, 24),
+                           ui.Button("MENU", W // 2, 410, self.to_menu, 260, 52, ui.CYAN, 24)]
+        self.over_btns = [ui.Button("PLAY AGAIN", W // 2 - 140, 560, self.again, 250, 52, ui.YELLOW, 26, True),
+                          ui.Button("MENU", W // 2 + 140, 560, self.to_menu, 250, 52, ui.CYAN, 24)]
         a.backdrop.set_theme(a.save["bg"])
         a.audio.music("play")
         a.audio.sfx("click")
@@ -205,7 +206,7 @@ class Play(Scene):
             self.fx.ring(it.x, it.y, (255, 170, 60))
             self.fx.ring(it.x, it.y, (255, 240, 200), 0.6)
             self.tscale.slowmo(0.9, 0.3)
-            self.flash, self.flash_col = 1.0, (255, 60, 30)
+            self.flash, self.flash_col = 1.0, (255, 40, 90)
             self.parts.burst(it.x, it.y, (255, 170, 50), 40, 520, up=100)
             self.parts.burst(it.x, it.y, (90, 90, 100), 16, 260, size=(4, 8))
             self.splats.add(it.x, it.y, (40, 30, 30), 150, self.app.quality.splat_cap)
@@ -264,7 +265,7 @@ class Play(Scene):
     def lose_life(self):
         self.app.audio.sfx("miss")
         self.lives -= 1
-        self.flash, self.flash_col = 0.5, (255, 60, 30)
+        self.flash, self.flash_col = 0.5, (255, 40, 90)
         self.combo.reset()
         if self.lives <= 0:
             self.end_game()
@@ -427,6 +428,31 @@ class Play(Scene):
                 self.finish_swipe()
 
     # ----------------------------------------------------------------- draw
+    def glow_for(self, it):
+        if self.app.quality.level < 1:
+            return None
+        key = it.name or it.kind
+        g = self.glows.get(key)
+        if g is None:
+            col = {"bomb": (90, 10, 30), "boss": (60, 10, 30)}.get(key)
+            if col is None:
+                col = settings.FRUIT_JUICE.get(key, (0, 70, 90))
+                col = tuple(int(c * 0.30) for c in col)
+            size = int(it.r * 3.0)
+            g = additive_glow(self.app.art.glow, size, col)
+            self.glows[key] = g
+        return g
+
+    def glitch(self, s):
+        """Tear a few horizontal strips of the finished frame sideways (bomb hit)."""
+        k = self.flash
+        for _ in range(int(3 + 6 * k)):
+            y = random.randrange(0, H - 40)
+            h = random.randrange(6, 36)
+            off = random.randrange(-40, 40) * k
+            strip = s.subsurface((0, y, W, h)).copy()
+            s.blit(strip, (off, y))
+
     def draw(self, s):
         a = self.app
         a.backdrop.draw(s)
@@ -436,6 +462,9 @@ class Play(Scene):
             sh.draw(s, p.x, p.y, 30)
         for it in self.items:
             sh.draw(s, it.x, it.y, it.r)
+            g = self.glow_for(it)
+            if g is not None:
+                s.blit(g, g.get_rect(center=(it.x, it.y)), special_flags=pygame.BLEND_RGB_ADD)
         for p in self.pieces:
             p.draw(s)
         for it in self.items:
@@ -448,6 +477,8 @@ class Play(Scene):
         if self.shake.amp > 0.5:
             ox, oy = self.shake.offset()
             s.scroll(ox, oy)
+        if self.flash > 0.35 and self.flash_col == (255, 40, 90):
+            self.glitch(s)
         if self.flash > 0:
             self.flash_surf.fill(self.flash_col)
             self.flash_surf.set_alpha(int(120 * self.flash))
@@ -460,8 +491,8 @@ class Play(Scene):
             self.draw_hud(s)
         if self.state == "pause":
             s.blit(self.dim, (0, 0))
-            s.blit(ui.panel(380, 330, (30, 16, 40, 235)), (310, 170))
-            ui.blit_text(s, "Paused", 52, (W // 2, 215), (255, 210, 74))
+            s.blit(ui.panel(380, 330, (10, 6, 24, 235), ui.CYAN), (298, 158))
+            ui.blit_text(s, "PAUSED", 50, (W // 2, 215), ui.CYAN)
             for b in self.pause_btns:
                 b.draw(s)
         elif self.state == "over":
@@ -469,8 +500,8 @@ class Play(Scene):
 
     def draw_hud(self, s):
         a = self.app
-        ui.blit_text(s, str(self.score), 64, (22, 8), (255, 255, 255), "topleft", ow=3)
-        ui.blit_text(s, f"Best {a.save['best'].get(self.mode, 0)}", 18, (26, 78), (255, 230, 150), "topleft")
+        ui.blit_text(s, str(self.score), 62, (22, 8), (255, 255, 255), "topleft", ow=3, use_tech=False)
+        ui.blit_text(s, f"HI {a.save['best'].get(self.mode, 0)}", 18, (26, 80), ui.CYAN, "topleft")
         x = 24
         if self.combo.alive(self.t):
             c = min(5, self.combo.count)
@@ -486,30 +517,17 @@ class Play(Scene):
                 pygame.draw.rect(s, col, (x, y + 22, int(130 * rem / dur), 10), border_radius=5)
                 y += 40
         if self.frenzy_t > 0:
-            ui.blit_text(s, f"FRENZY x2  {self.frenzy_t:.1f}s", 16, (x, y), (255, 220, 70), "topleft")
+            ui.blit_text(s, f"FRENZY x2  {self.frenzy_t:.1f}s", 16, (x, y), ui.YELLOW, "topleft")
         if self.time_left is not None:
             frac = self.time_left / ({"arcade": 60.0, "zen": 90.0}[self.mode])
-            bar = pygame.Rect(0, 0, 300, 22)
-            bar.center = (W // 2, 30)
-            pygame.draw.rect(s, (30, 15, 30), bar.inflate(6, 6), border_radius=14)
-            col = ui.lerp_col((255, 70, 60), (120, 220, 80), min(1.0, frac * 1.5))
-            f = bar.copy()
-            f.w = max(0, int(bar.w * frac))
-            if f.w:
-                pygame.draw.rect(s, col, f, border_radius=11)
-            ui.blit_text(s, f"{int(math.ceil(self.time_left))}", 20, bar.center)
+            self.neon_bar(s, pygame.Rect(W // 2 - 150, 14, 300, 28), frac,
+                          ui.lerp_col(ui.MAGENTA, ui.CYAN, min(1.0, frac * 1.6)), f"{int(math.ceil(self.time_left))}")
         if self.max_lives:
             for i in range(self.max_lives):
                 s.blit(ui.heart(36, i < self.lives), (W - 100 - (self.max_lives - 1 - i) * 38 - 40, 20))
         if self.boss and self.boss.alive:
             total = max(6, round(10 * self.diff["count"]))
-            bar = pygame.Rect(0, 0, 360, 20)
-            bar.center = (W // 2, 74)
-            pygame.draw.rect(s, (30, 15, 30), bar.inflate(6, 6), border_radius=12)
-            f = bar.copy()
-            f.w = max(0, int(bar.w * self.boss.hp / total))
-            pygame.draw.rect(s, (235, 60, 80), f, border_radius=10)
-            ui.blit_text(s, "GIANT WATERMELON", 14, bar.center)
+            self.neon_bar(s, pygame.Rect(W // 2 - 180, 58, 360, 26), self.boss.hp / total, ui.MAGENTA, "GIANT WATERMELON")
         if self.banner:
             t = 1.0 - self.banner[1] / (1.8 if len(self.banner[0]) > 14 else 1.6)
             k = ui.ease_out_back(min(1.0, t * 4))
@@ -520,17 +538,28 @@ class Play(Scene):
         if self.state == "play":
             self.btn_pause.draw(s)
 
+    def neon_bar(self, s, rect, frac, col, label):
+        box = ui.neon_box(rect.w, rect.h, col, cut=9, glow=0.8)
+        s.blit(box, box.get_rect(center=rect.center))
+        inner = rect.inflate(-16, -12)
+        n = max(6, inner.w // 12)
+        seg = inner.w / n
+        for i in range(n):
+            c = col if (i + 1) / n <= frac + 1e-6 else (34, 24, 58)
+            pygame.draw.rect(s, c, (inner.x + i * seg + 1, inner.y, max(2, seg - 3), inner.h))
+        ui.blit_text(s, label, 15, rect.center, (255, 255, 255), ow=1)
+
     def draw_over(self, s):
         a = self.app
         r = self.result
         s.blit(self.dim, (0, 0))
         k = ui.ease_out_back(self.over_t * 2.5)
-        ui.blit_text(s, r["title"], 64, (W // 2, 90), (255, 210, 74), ow=3, scale=max(0.1, k))
+        ui.blit_text(s, r["title"].upper(), 60, (W // 2, 90), ui.MAGENTA, ow=3, scale=max(0.1, k))
         shown = int(self.score * min(1.0, self.over_t / 0.9))
         ui.blit_text(s, str(shown), 96, (W // 2, 190), (255, 255, 255), ow=4)
         if r["new_best"]:
             pulse = 1.0 + 0.08 * math.sin(self.over_t * 8)
-            ui.blit_text(s, "NEW BEST!", 40, (W // 2, 262), (255, 120, 150), scale=pulse)
+            ui.blit_text(s, "NEW HIGH SCORE!", 36, (W // 2, 262), ui.YELLOW, scale=pulse)
         else:
             ui.blit_text(s, f"Best: {a.save['best'].get(self.mode, 0)}", 28, (W // 2, 262), (255, 230, 150))
         ui.blit_text(s, f"Fruit sliced {self.stats['sliced']}    Best combo x{self.stats['best_combo']}"
@@ -540,7 +569,7 @@ class Play(Scene):
             ui.blit_text(s, "Daily challenge complete!", 24, (W // 2, y), (140, 240, 100))
             y += 36
         for aid in r["ach"]:
-            ui.blit_text(s, "Achievement: " + progress.ACH_BY_ID[aid][1], 24, (W // 2, y), (255, 210, 74))
+            ui.blit_text(s, "Achievement: " + progress.ACH_BY_ID[aid][1], 24, (W // 2, y), (252, 238, 10))
             y += 34
         for u in r["unlocks"][:3]:
             group, item = u.split(":")

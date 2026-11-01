@@ -55,10 +55,10 @@ class App:
         progress.save(self.save)
 
     def make_loader(self):
-        steps = [("Sanding the cutting board", lambda: self.art.theme(self.save["bg"]))]
-        steps += self.art.steps()
+        steps = list(self.art.steps())
+        steps.append(("Wiring neon board", lambda: self.art.theme(self.save["bg"])))
         steps += self.audio.steps()
-        steps.append(("Sharpening the knives", self.backdrop.setup))
+        steps.append(("Sharpening knives", self.backdrop.setup))
         return Loader(steps)
 
     async def boot(self):

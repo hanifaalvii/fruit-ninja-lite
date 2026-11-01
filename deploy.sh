@@ -2,7 +2,7 @@
 # Builds the web version and copies it to docs/ (served by GitHub Pages).
 set -e
 cd "$(dirname "$0")"
-python3 -m pygbag --build .
+python3 -m pygbag --template web/pygbag.tmpl --build .
 rm -rf docs
 mkdir docs
 cp -R build/web/* docs/

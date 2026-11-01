@@ -5,7 +5,7 @@ import time
 
 import pygame
 
-from . import settings
+from . import settings, ui
 
 ANGLE_STEP = 6
 N_ANGLES = 360 // ANGLE_STEP
@@ -93,6 +93,38 @@ class SphereArt:
             self.frame(k * ANGLE_STEP)
 
 
+def cyber_grade(img):
+    """One-time neon grade: cooler/darker board, scanlines, glowing chamfered rim and corner brackets."""
+    W, H = img.get_size()
+    out = img.copy()
+    out.fill((150, 142, 178), special_flags=pygame.BLEND_RGB_MULT)
+    vg = pygame.Surface((80, 52))
+    for y in range(52):
+        for x in range(80):
+            d = ((x / 79 - 0.5) ** 2 * 1.3 + (y / 51 - 0.5) ** 2) ** 0.5 / 0.7
+            c = int(255 * max(0.0, min(1.0, 1.08 - 0.62 * max(0.0, d - 0.25))))
+            vg.set_at((x, y), (c, c, c))
+    out.blit(pygame.transform.smoothscale(vg, (W, H)), (0, 0), special_flags=pygame.BLEND_RGB_MULT)
+    sl = pygame.Surface((W, H), pygame.SRCALPHA)
+    for y in range(0, H, 3):
+        sl.fill((0, 0, 0, 40), (0, y, W, 1))
+    out.blit(sl, (0, 0))
+    rim = pygame.Surface((W, H), pygame.SRCALPHA)
+    i, c = 14, 44
+    pts = [(i + c, i), (W - i, i), (W - i, H - i - c), (W - i - c, H - i), (i, H - i), (i, i + c)]
+    for k in range(len(pts)):
+        p0, p1 = pts[k], pts[(k + 1) % len(pts)]
+        mx, my = (p0[0] + p1[0]) / 2, (p0[1] + p1[1]) / 2
+        col = ui.lerp_col(ui.CYAN, ui.MAGENTA, (mx / W + my / H) / 2)
+        for w_, a_ in ((16, 12), (10, 22), (6, 44)):
+            pygame.draw.line(rim, (*col, a_), p0, p1, w_)
+        pygame.draw.line(rim, (*ui.lerp_col(col, (255, 255, 255), 0.35), 255), p0, p1, 2)
+    for (x0, y0, dx, dy) in ((26, 26, 1, 1), (W - 26, 26, -1, 1), (26, H - 26, 1, -1), (W - 26, H - 26, -1, -1)):
+        pygame.draw.lines(rim, (*ui.YELLOW, 230), False, [(x0 + dx * 26, y0), (x0, y0), (x0, y0 + dy * 26)], 3)
+    out.blit(rim, (0, 0))
+    return out
+
+
 class Theme:
     """A cutting board backdrop. Any 1000x650 board_<name>.jpg dropped into assets/img/ replaces the baked one."""
 
@@ -101,7 +133,7 @@ class Theme:
         img = load_image(f"board_{name}.jpg", alpha=False)
         if img.get_size() != (settings.W, settings.H):
             img = pygame.transform.smoothscale(img, (settings.W, settings.H))
-        self.static = img.convert()
+        self.static = cyber_grade(img).convert()
 
 
 class Art:
@@ -151,10 +183,10 @@ class Art:
             return lambda: setattr(self, attr, self.sphere(name, r, halves))
 
         return [
-            ("Printing the logo", lambda: setattr(self, "logo", load_image("logo.png"))),
-            ("Polishing fruit", fruits),
+            ("Compiling logo", lambda: setattr(self, "logo", ui.make_logo())),
+            ("Rendering fruit", fruits),
             ("Arming bombs", sphere_step("bomb", "bomb", 36, False)),
-            ("Growing a giant melon", sphere_step("boss", "boss", 112, True)),
+            ("Growing boss melon", sphere_step("boss", "boss", 112, True)),
             ("Charging power-ups", orbs),
             ("Mixing juice", misc),
         ]
